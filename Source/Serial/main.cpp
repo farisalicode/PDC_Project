@@ -6,8 +6,10 @@
 
 
 
-const unsigned int number_of_objectives = 2;
-const int source_vertex = 0;
+const unsigned int number_of_objectives = 2; //so changing manually?
+
+const int source_vertex = 0; //oki
+
 
 struct Edge
 {
@@ -213,14 +215,20 @@ void make_static_sosp (std::vector<Edge*>& edge_list, std::unordered_map<int, Co
         not_visited[edge->source] = Couple (-1, INT_MAX);
         not_visited[edge->destination] = Couple (-1, INT_MAX);
     }
+
+    
     not_visited[source_vertex].cost = 0;
+
+
     while (!not_visited.empty ())
     {
-        int current = find_minimum (not_visited);
+        int current = find_minimum (not_visited); //gets the vertex number
         if (current == -1)
         {
             break;
         }
+
+
         Couple current_data = not_visited[current];
         sosp[current] = current_data;
         not_visited.erase (current);
@@ -289,12 +297,15 @@ void display_static_sosp (std::unordered_map<int, Couple>& sosp, unsigned int ob
 
 void make_static_mosp (std::vector<Edge*>& edge_list, std::unordered_map<int, Couple> &mosp)
 {
-    std::vector<std::unordered_map<int, Couple>> sosps;
+    std::vector<std::unordered_map<int, Couple>> sosps; //vector of hashmaps
     for (unsigned int i = 0; i < number_of_objectives; ++i)
     {
         sosps.emplace_back (std::unordered_map<int, Couple>());
-        make_static_sosp (edge_list, sosps[i], i);
+        make_static_sosp (edge_list, sosps[i], i); //making separate SOSPs
     }
+
+
+
     std::vector<Edge*> combined_graph;
     std::unordered_map<int, std::unordered_map<int, int>> edge_count;
     for (unsigned int i = 0; i < number_of_objectives; ++i)
@@ -318,7 +329,7 @@ void make_static_mosp (std::vector<Edge*>& edge_list, std::unordered_map<int, Co
             int x = dest_pair.second;
             Edge* new_edge = new Edge(source, destination);
             new_edge->objectives = new int[1];
-            new_edge->objectives[0] = number_of_objectives - x + 1;
+            new_edge->objectives[0] = number_of_objectives - x + 1; //k-x+1
             combined_graph.push_back (new_edge);
         }
     }
@@ -493,7 +504,7 @@ void make_dynamic_mosp (std::vector<Edge*>& edge_list, std::unordered_map<int, C
         }
     }
     mosp.clear ();
-    make_static_sosp (combined_graph, mosp, 0);
+    make_dynamic_sosp (combined_graph, mosp, 0);
     display_dynamic_sosp (mosp, 0);
     for (Edge* edge : combined_graph)
     {
@@ -504,11 +515,17 @@ void make_dynamic_mosp (std::vector<Edge*>& edge_list, std::unordered_map<int, C
 
 int main (int argc, char* argv[])
 {
+    //reading and making the edge list 
     std::string graph_file = read_graph_from_file ("graph.txt");
     std::vector<Edge*> edge_list;
     create_edge_list (graph_file, edge_list);
     std::unordered_map<int, Couple> mosp;
+
+    //initial shortest path with pareto optimality
     make_static_mosp (edge_list, mosp);
+
+
+
     int* objectives = new int[2];
     objectives[0] = 17;
     objectives[1] = 45;
