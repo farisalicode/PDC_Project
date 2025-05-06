@@ -6,6 +6,7 @@
 
 
 
+std::vector<std::unordered_map<int, Couple>> global_sosps;
 const unsigned int number_of_objectives = 2;
 const int source_vertex = 0;
 
