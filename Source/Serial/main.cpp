@@ -331,77 +331,90 @@ void make_static_mosp (std::vector<Edge*>& edge_list, std::unordered_map<int, Co
     return;
 }
 
-void make_dynamic_sosp (std::vector<Edge*>& edge_list, std::unordered_map<int, Couple>& sosp, unsigned int objective_number)
+void make_dynamic_sosp(std::vector<Edge*>& edge_list, std::unordered_map<int, Couple>& sosp,
+    unsigned int objective_number,
+    const std::vector<Edge*>& changed_edges = std::vector<Edge*>(),
+    const std::vector<bool>& is_insertion = std::vector<bool>())
 {
-    if (sosp.empty ())
+    if (sosp.empty())
     {
-        make_static_sosp (edge_list, sosp, objective_number);
+        make_static_sosp(edge_list, sosp, objective_number);
         return;
     }
-    std::unordered_map<int, std::vector<std::pair<int, int>>> insert_groups;
-    for (Edge* edge : edge_list)
-    {
-        int u = edge->source;
-        int v = edge->destination;
-        int weight = edge->objectives[objective_number];
-        insert_groups[v].push_back (std::make_pair(u, weight));
-    }
-    std::vector<int> affected_vertices;
-    for (auto& group : insert_groups)
-    {
-        int v = group.first;
-        bool updated = false;
-        for (auto& edge_info : group.second)
+    // This part can be easily parallelized with OpenMP later
+    //{
+        // Begin parallel section - each group of vertices will be processed by a separate thread
+        std::unordered_map<int, std::vector<std::pair<int, int>>> insert_groups;
+        for (Edge* edge : edge_list)
         {
-            int u = edge_info.first;
-            int weight = edge_info.second;
-            if (sosp.find (u) != sosp.end () && sosp[u].cost != INT_MAX)
+            int u = edge->source;
+            int v = edge->destination;
+            int weight = edge->objectives[objective_number];
+            insert_groups[v].push_back(std::make_pair(u, weight));
+        }
+
+        std::vector<int> affected_vertices;
+        for (auto& group : insert_groups)
+        {
+            int v = group.first;
+            bool updated = false;
+            for (auto& edge_info : group.second)
             {
-                int new_cost = sosp[u].cost + weight;
-                if (sosp.find (v) == sosp.end () || new_cost < sosp[v].cost)
+                int u = edge_info.first;
+                int weight = edge_info.second;
+                if (sosp.find(u) != sosp.end() && sosp[u].cost != INT_MAX)
                 {
-                    sosp[v].cost = new_cost;
-                    sosp[v].parent = u;
-                    updated = true;
+                    int new_cost = sosp[u].cost + weight;
+                    if (sosp.find(v) == sosp.end() || new_cost < sosp[v].cost)
+                    {
+                        sosp[v].cost = new_cost;
+                        sosp[v].parent = u;
+                        updated = true;
+                    }
                 }
             }
-        }
-        if (updated)
-        {
-            affected_vertices.push_back (v);
-        }
+            if (updated)
+            {
+                affected_vertices.push_back(v);
+            }
+        //}
+        // End parallel section
     }
+
+    // Propagate updates through the graph
     bool changes_made = true;
-    while (changes_made && !affected_vertices.empty ())
+    while (changes_made && !affected_vertices.empty())
     {
         changes_made = false;
         std::vector<int> neighbors;
         std::vector<bool> is_neighbor(1000, false);
+
         for (int affected : affected_vertices)
         {
             for (Edge* edge : edge_list)
             {
                 if (edge->source == affected && !is_neighbor[edge->destination])
                 {
-                    neighbors.push_back (edge->destination);
+                    neighbors.push_back(edge->destination);
                     is_neighbor[edge->destination] = true;
                 }
             }
         }
-        affected_vertices.clear ();
+
+        affected_vertices.clear();
         for (int neighbor : neighbors)
         {
             bool updated = false;
             for (Edge* edge : edge_list)
             {
-                if (edge->destination == neighbor && sosp.find(edge->source) != sosp.end ())
+                if (edge->destination == neighbor && sosp.find(edge->source) != sosp.end())
                 {
                     int u = edge->source;
                     int weight = edge->objectives[objective_number];
                     if (sosp[u].cost != INT_MAX)
                     {
                         int new_cost = sosp[u].cost + weight;
-                        if (sosp.find (neighbor) == sosp.end () || new_cost < sosp[neighbor].cost)
+                        if (sosp.find(neighbor) == sosp.end() || new_cost < sosp[neighbor].cost)
                         {
                             sosp[neighbor].cost = new_cost;
                             sosp[neighbor].parent = u;
@@ -413,14 +426,14 @@ void make_dynamic_sosp (std::vector<Edge*>& edge_list, std::unordered_map<int, C
             }
             if (updated)
             {
-                affected_vertices.push_back (neighbor);
+                affected_vertices.push_back(neighbor);
             }
         }
     }
     return;
 }
 
-void display_dynamic_sosp (std::unordered_map<int, Couple>& sosp, unsigned int objective_number)
+void display_dynamic_sosp(std::unordered_map<int, Couple>& sosp, unsigned int objective_number)
 {
     std::cout << "\nShortest Path tree from source vertex " << source_vertex << ", objective number " << objective_number << ":\n\n";
     for (const auto pair : sosp)
@@ -436,13 +449,13 @@ void display_dynamic_sosp (std::unordered_map<int, Couple>& sosp, unsigned int o
         int current = vertex;
         while (current != -1)
         {
-            path.push_back (current);
+            path.push_back(current);
             current = sosp[current].parent;
         }
-        if (!path.empty ())
+        if (!path.empty())
         {
             std::cout << "Vertex: " << vertex << ", Cost: " << cost << ", Path: ";
-            for (int i = path.size () - 1; i >= 0; --i)
+            for (int i = path.size() - 1; i >= 0; --i)
             {
                 std::cout << path[i];
                 if (i != 0) std::cout << " -> ";
@@ -453,20 +466,23 @@ void display_dynamic_sosp (std::unordered_map<int, Couple>& sosp, unsigned int o
     return;
 }
 
-void make_dynamic_mosp (std::vector<Edge*>& edge_list, std::unordered_map<int, Couple>& mosp, unsigned int new_size, unsigned int old_size)
+void make_dynamic_mosp(std::vector<Edge*>& edge_list, std::unordered_map<int, Couple>& mosp,
+    const std::vector<Edge*>& changed_edges, const std::vector<bool>& is_insertion)
 {
-    std::vector<Edge*> inserted_edges;
-    for (unsigned int i = old_size; i < new_size && i < edge_list.size(); ++i)
-    {
-        inserted_edges.push_back (edge_list[i]);
-    }
-    std::vector<std::unordered_map<int, Couple>> sosps (number_of_objectives);
+    std::vector<std::unordered_map<int, Couple>> sosps(number_of_objectives);
+
+    // Update each SOSP tree for each objective
     for (unsigned int i = 0; i < number_of_objectives; ++i)
     {
-        make_dynamic_sosp (edge_list, sosps[i], i);
+        make_dynamic_sosp(edge_list, sosps[i], i, changed_edges, is_insertion);
+        // display_dynamic_sosp(sosps[i], i);
     }
+
+    // Create a combined graph using the updated SOSP trees
     std::vector<Edge*> combined_graph;
     std::unordered_map<int, std::unordered_map<int, int>> edge_count;
+
+    // Count how many times each edge appears in SOSP trees
     for (unsigned int i = 0; i < number_of_objectives; ++i)
     {
         for (const auto& pair : sosps[i])
@@ -479,6 +495,8 @@ void make_dynamic_mosp (std::vector<Edge*>& edge_list, std::unordered_map<int, C
             }
         }
     }
+
+    // Create the combined graph with weights based on edge appearances in SOSP trees
     for (const auto& source_pair : edge_count)
     {
         int source = source_pair.first;
@@ -486,15 +504,15 @@ void make_dynamic_mosp (std::vector<Edge*>& edge_list, std::unordered_map<int, C
         {
             int destination = dest_pair.first;
             int x = dest_pair.second;
-            Edge* new_edge = new Edge (source, destination);
+            Edge* new_edge = new Edge(source, destination);
             new_edge->objectives = new int[1];
             new_edge->objectives[0] = number_of_objectives - x + 1;
-            combined_graph.push_back (new_edge);
+            combined_graph.push_back(new_edge);
         }
     }
-    mosp.clear ();
-    make_static_sosp (combined_graph, mosp, 0);
-    display_dynamic_sosp (mosp, 0);
+    mosp.clear();
+    make_static_sosp(combined_graph, mosp, 0);
+    display_dynamic_sosp(mosp, 0);
     for (Edge* edge : combined_graph)
     {
         delete edge;
@@ -502,21 +520,47 @@ void make_dynamic_mosp (std::vector<Edge*>& edge_list, std::unordered_map<int, C
     return;
 }
 
-int main (int argc, char* argv[])
+int main(int argc, char* argv[])
 {
-    std::string graph_file = read_graph_from_file ("graph.txt");
+    std::string graph_file = read_graph_from_file("graph.txt");
     std::vector<Edge*> edge_list;
-    create_edge_list (graph_file, edge_list);
+    create_edge_list(graph_file, edge_list);
     std::unordered_map<int, Couple> mosp;
-    make_static_mosp (edge_list, mosp);
+    make_static_mosp(edge_list, mosp);
+    std::vector<Edge*> changed_edges;
+    std::vector<bool> is_insertion;
     int* objectives = new int[2];
     objectives[0] = 17;
     objectives[1] = 45;
-    insert_edge (2, 4, objectives, edge_list);
-    insert_edge (2, 1, objectives, edge_list);
-    remove_edge (3, 4, edge_list);
-    remove_edge (0, 1, edge_list);
-    make_dynamic_mosp(edge_list, mosp, 5, 5);
+    Edge* new_edge1 = new Edge(2, 4);
+    new_edge1->objectives[0] = objectives[0];
+    new_edge1->objectives[1] = objectives[1];
+    changed_edges.push_back(new_edge1);
+    is_insertion.push_back(true);
+    insert_edge(2, 4, objectives, edge_list);
+    Edge* new_edge2 = new Edge(2, 1);
+    new_edge2->objectives[0] = objectives[0];
+    new_edge2->objectives[1] = objectives[1];
+    changed_edges.push_back(new_edge2);
+    is_insertion.push_back(true);
+    insert_edge(2, 1, objectives, edge_list);
+    Edge* removed_edge1 = new Edge(3, 4);
+    changed_edges.push_back(removed_edge1);
+    is_insertion.push_back(false);
+    remove_edge(3, 4, edge_list);
+    Edge* removed_edge2 = new Edge(0, 1);
+    changed_edges.push_back(removed_edge2);
+    is_insertion.push_back(false);
+    remove_edge(0, 1, edge_list);
+    make_dynamic_mosp(edge_list, mosp, changed_edges, is_insertion);
     delete[] objectives;
+    for (Edge* edge : changed_edges)
+    {
+        delete edge;
+    }
+    for (Edge* edge : edge_list)
+    {
+        delete edge;
+    }
     return 0;
 }
